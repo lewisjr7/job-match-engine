@@ -1,0 +1,14 @@
+[project]
+name = "job-match-engine"
+version = "0.1.0"
+description = "Personal job matching engine using resume-to-job scoring"
+requires-python = ">=3.10"
+authors = [{ name = "You" }]
+
+
+[tool.black]
+line-length = 88
+
+
+[tool.isort]
+profile = "black"

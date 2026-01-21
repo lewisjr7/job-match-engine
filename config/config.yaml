@@ -1,0 +1,36 @@
+
+
+---
+
+
+## `config/config.yaml`
+```yaml
+version: 1
+
+
+resume:
+path: "/Users/justinlewis/Desktop/lewis_justin_final"
+
+
+filters:
+keywords:
+- python
+- data engineer
+locations:
+- remote
+remote_only: true
+min_match_percent: 75
+
+
+scoring:
+weights:
+required_skills: 0.45
+preferred_skills: 0.20
+semantic_similarity: 0.20
+experience: 0.10
+title_similarity: 0.05
+
+
+output:
+top_n: 20
+explain: true

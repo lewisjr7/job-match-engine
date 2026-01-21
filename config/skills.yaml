@@ -1,0 +1,14 @@
+python:
+- python
+- py
+sql:
+- sql
+- postgres
+- mysql
+aws:
+- aws
+- amazon web services
+pandas:
+- pandas
+etl:
+- etl
