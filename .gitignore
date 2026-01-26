@@ -24,6 +24,6 @@ data/results/
 build/
 *.egg-info/
 
-# Local/private data
-data/
+# Local/private data (DO NOT COMMIT)
+data/*
 !data/.gitkeep
