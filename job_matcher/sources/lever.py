@@ -15,7 +15,7 @@ class LeverSource(JobSource):
         url = f"https://api.lever.co/v0/postings/{self.company}?mode=json"
 
         try:
-            response = requests.get(url, timeout=10)
+            response = requests.get(url, timeout=60)
             response.raise_for_status()
             data = response.json()
         except Exception:

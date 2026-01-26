@@ -1,36 +1,117 @@
-
-
----
-
-
-## `config/config.yaml`
-```yaml
 version: 1
 
-
 resume:
-path: "/Users/justinlewis/Desktop/lewis_justin_final"
-
+  path: /Users/justinlewis/Desktop/lewis_justin_final.pdf
 
 filters:
-keywords:
-- python
-- data engineer
-locations:
-- remote
-remote_only: true
-min_match_percent: 75
+  keywords:
+    - python
+    - data
+    - backend
 
+  exclude_title_keywords:
+    - intern
+    - internship
+    - manager
+    - director
+    - lead
+    - principal
+    - contract
+    - contractor
+    - temporary
+
+  include_title_keywords:
+    - data engineer
+    - analytics engineer
+    - data analyst
+    - business intelligence
+    - bi analyst
+    - data warehouse
+    - data platform
+    - etl
+    - ml engineer
+    - machine learning engineer
+  
+  locations:
+    - remote
+    # - united states
+  remote_only: true
+  min_match_percent: 70
 
 scoring:
-weights:
-required_skills: 0.45
-preferred_skills: 0.20
-semantic_similarity: 0.20
-experience: 0.10
-title_similarity: 0.05
-
+  weights:
+    required_skills: 0.3
+    preferred_skills: 0.2
+    semantic_similarity: 0.25
+    experience: 0.15
+    title_similarity: 0.1
 
 output:
-top_n: 20
-explain: true
+  top_n: 20000
+  explain: true
+
+# sources:
+#   greenhouse:
+#     companies:
+#       - airbnb
+#       - stripe
+#       - databricks
+#       # - spotify
+#       - spacex
+#       - 
+
+sources:
+  greenhouse:
+    companies:
+      - airbnb
+      - stripe
+      - databricks
+      - spacex
+      - robinhood
+      - coinbase
+      - okta
+      - reddit
+      - lyft
+      - pinterest
+      - dropbox
+      - instacart
+      - figma
+      - asana
+      - block
+      - brex
+      - chime
+      - affirm
+      - datadog
+      - cloudflare
+      - twilio
+      - mongodb
+      - elastic
+      - fastly
+      - boxinc
+      - gitlab
+      - pinterest
+      - hubspot
+      - samsara
+      - gusto
+      - scaleai
+      - nuro
+      - roblox
+      - coursera
+      - duolingo
+      - peloton
+      - allbirds
+      - discord
+      - epicgames
+      - orcasecurity
+      - mixpanel
+      - amplitude
+      - intercom
+      - airtable
+      - newrelic
+      - cockroachlabs
+      - redis
+      - rubrik
+      - zscaler
+      - databricks
+
+

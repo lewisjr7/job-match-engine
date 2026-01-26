@@ -1,7 +1,6 @@
-pydantic>=2.5
-pydantic-settings
-PyYAML
-requests
-pdfplumber
-sentence-transformers
-scikit-learn
+pydantic>=2.0
+PyYAML>=6.0
+requests>=2.31
+pdfplumber>=0.10
+beautifulsoup4>=4.12
+lxml>=5.0

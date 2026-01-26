@@ -1,10 +1,22 @@
+# Python
 __pycache__/
-*.pyc
-.env
+*.py[cod]
+
+# Virtual environments
 .venv/
 venv/
-data/
+
+# Environment variables
+.env
+
+# Generated data (do not commit)
+data/raw_jobs/
+data/results/
+
+# Caches
 .cache/
+
+# OS / Editor
 .DS_Store
 .idea/
 .vscode/
