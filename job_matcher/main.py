@@ -12,7 +12,6 @@ from job_matcher.config import load_config
 from job_matcher.matching import load_raw_jobs, score_jobs
 from job_matcher.resume import load_resume_text
 
-
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -82,13 +81,21 @@ def run(config_path: str = "config/config.yaml") -> None:
     raw_dir = REPO_ROOT / "data" / "raw_jobs"
     raw_jobs = load_raw_jobs(str(raw_dir))
     if not raw_jobs:
-        print(f"No raw jobs found in {raw_dir}. Run: python3 -m scripts.refresh_jobs")
+        print(f"No raw jobs found in {raw_dir}. Run: python -m scripts.refresh_jobs")
         return
 
     # Pass plain dicts to scoring layer
     weights_dict = cfg.scoring.weights.model_dump()
     filters_dict = cfg.filters.model_dump()
     filters_dict["companies"] = cfg.sources.greenhouse.companies
+    # ✅ pass new location policy block (if present)
+    filters_dict["location_filters"] = (
+        cfg.location_filters.model_dump() if getattr(cfg, "location_filters", None) else {}
+    )
+
+    print("[DEBUG] location_filters passed to matcher:", filters_dict["location_filters"])
+
+
 
     results = score_jobs(
         resume_text=resume_text,
@@ -98,7 +105,7 @@ def run(config_path: str = "config/config.yaml") -> None:
         filters=filters_dict,
     )
 
-    # Apply top_n from config.output if you want
+    # Apply top_n from config.output
     results = results[: cfg.output.top_n]
 
     out_dir = REPO_ROOT / "data" / "results"

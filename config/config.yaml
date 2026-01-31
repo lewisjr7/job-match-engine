@@ -1,13 +1,28 @@
 version: 1
 
 resume:
-  path: /Users/justinlewis/Desktop/lewis_justin_final.pdf
+  # Mac example:
+  # path: /Users/justinlewis/Desktop/lewis_justin_final.pdf
+  path: C:\Users\lewis\Documents\job-match-engine\data\resume\lewis_justin_final.pdf
 
 filters:
   keywords:
     - python
     - data
     - backend
+
+  include_title_keywords:
+    - data engineer
+    - analytics engineer
+    - engineer
+    - data analyst
+    - business intelligence
+    - bi analyst
+    - data warehouse
+    - data platform
+    - etl
+    - ml engineer
+    - machine learning engineer
 
   exclude_title_keywords:
     - intern
@@ -20,98 +35,135 @@ filters:
     - contractor
     - temporary
 
-  include_title_keywords:
-    - data engineer
-    - analytics engineer
-    - data analyst
-    - business intelligence
-    - bi analyst
-    - data warehouse
-    - data platform
-    - etl
-    - ml engineer
-    - machine learning engineer
-  
-  locations:
-    - remote
-    # - united states
-  remote_only: true
+  # ✅ legacy location filters OFF when using location_filters
+  locations: []
+  remote_only: false
+
   min_match_percent: 70
+
+# ✅ TOP-LEVEL (not under filters)
+location_filters:
+  allow_remote: true
+  allowed_countries:
+    - United States
+  # Optional: include local onsite/hybrid jobs too (does NOT affect remote)
+  # allowed_states: ["WI"]
+  # allowed_cities: ["Milwaukee"]
 
 scoring:
   weights:
-    required_skills: 0.3
-    preferred_skills: 0.2
+    required_skills: 0.30
+    preferred_skills: 0.20
     semantic_similarity: 0.25
     experience: 0.15
-    title_similarity: 0.1
+    title_similarity: 0.10
 
 output:
   top_n: 20000
   explain: true
 
-# sources:
-#   greenhouse:
-#     companies:
-#       - airbnb
-#       - stripe
-#       - databricks
-#       # - spotify
-#       - spacex
-#       - 
+mode: company
+
+discovery:
+  enabled: false
+  provider: null
+  queries:
+    - "data engineer remote united states"
+    - "analytics engineer remote united states"
 
 sources:
   greenhouse:
     companies:
-      - airbnb
-      - stripe
-      - databricks
-      - spacex
-      - robinhood
-      - coinbase
-      - okta
-      - reddit
-      - lyft
-      - pinterest
-      - dropbox
-      - instacart
-      - figma
-      - asana
-      - block
-      - brex
-      - chime
-      - affirm
-      - datadog
-      - cloudflare
-      - twilio
-      - mongodb
-      - elastic
-      - fastly
-      - boxinc
-      - gitlab
-      - pinterest
-      - hubspot
-      - samsara
-      - gusto
-      - scaleai
-      - nuro
-      - roblox
+      - Airbnb
+      - Affirm
+      - Airtable
+      - Allbirds
+      - Amplitude
+      - Anaplan
+      - Anthropic
+      - Asana
+      - Benchling
+      - Block
+      - Box
+      - Brex
+      - Carta
+      - Chime
+      - Cloudflare
+      - Cockroach Labs
+      - Coinbase
+      - Coursera
+      - Databricks
+      - Datadog
+      - Discord
+      - Dropbox
+      - Duolingo
+      - Elastic
+      - Epic Games
+      - Fastly
+      - Figma
+      - GitLab
+      - Gusto
+      - HubSpot
+      - Instacart
+      - Intercom
+      - Lyft
+      - Mixpanel
+      - MongoDB
+      - New Relic
+      - Nuro
+      - Okta
+      - Orca Security
+      - Peloton
+      - Pinterest
+      - PlanetScale
+      - Postman
+      - Reddit
+      - Redis
+      - Robinhood
+      - Roblox
+      - Rubrik
+      - Samsara
+      - Scale AI
+      - Smartsheet
+      - SoFi
+      # - SpaceX
+      - Stripe
+      - Temporal
+      - Twilio
+      - Zscaler
+      - YipitData
+      - Mark43
+
+  lever:
+    companies:
+      - netflix
+      - shopify
+      - yelp
       - coursera
-      - duolingo
-      - peloton
-      - allbirds
-      - discord
-      - epicgames
-      - orcasecurity
-      - mixpanel
-      - amplitude
-      - intercom
-      - airtable
-      - newrelic
-      - cockroachlabs
-      - redis
-      - rubrik
-      - zscaler
-      - databricks
-
-
+      - twitch
+      - medium
+      - headspace
+      - upwork
+      - lyft
+      - box
+      - figma
+      - nextdoor
+      - spotify
+      - creditkarma
+      - eventbrite
+      - quora
+      - placelink
+      - ramahealth
+      - samsara
+      - braze
+      - calm
+      - opendoor
+      - dutchie
+      - ro
+      - shieldai
+      - rackspacetechnology
+      - winntcompanies
+      - dunandbradstreet
+      - jobgether
+      - qualdoc
+      - elementslive

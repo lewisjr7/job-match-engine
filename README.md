@@ -33,13 +33,21 @@ This is a **decision-support system**, not an auto-apply bot.
 git clone <repo>
 cd job-match-engine
 
+MAC:
 python3 -m venv .venv
 source .venv/bin/activate
+
+WINDOWS:
+python -m venv .venv
+.venv\Scripts\Activate
 
 pip install -r requirements.txt
 
 python -m scripts.refresh_jobs
 python -m scripts.run_matcher --config config/config.yaml
+
+
+
 
 Architecture------------------------------------------------------------------
 
