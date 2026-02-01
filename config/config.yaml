@@ -46,9 +46,10 @@ location_filters:
   allow_remote: true
   allowed_countries:
     - United States
-  # Optional: include local onsite/hybrid jobs too (does NOT affect remote)
-  # allowed_states: ["WI"]
-  # allowed_cities: ["Milwaukee"]
+  allowed_states: ["WI", "IL"]
+  allowed_cities: ["Milwaukee", "Chicago"]
+
+
 
 scoring:
   weights:

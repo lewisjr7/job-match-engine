@@ -1,6 +1,7 @@
 # job_matcher/sources/lever.py
 from __future__ import annotations
 
+from datetime import datetime, timezone
 import re
 from typing import Any, Dict, List, Optional
 
@@ -9,19 +10,28 @@ import requests
 from job_matcher.sources.base import JobSource
 
 
-_REMOTE_RE = re.compile(
-    r"\b(remote|work from home|wfh|distributed|anywhere)\b", re.IGNORECASE
-)
+_REMOTE_RE = re.compile(r"\b(remote|work from home|wfh|distributed|anywhere|telecommute)\b", re.IGNORECASE)
 _HYBRID_RE = re.compile(r"\b(hybrid)\b", re.IGNORECASE)
 
 
 def _safe_str(x: Any) -> str:
-    return (x or "").strip() if isinstance(x, str) else ""
+    return x.strip() if isinstance(x, str) else ""
 
 
-def _flatten_list(values: List[str]) -> str:
-    cleaned = [v.strip() for v in values if isinstance(v, str) and v.strip()]
-    return " | ".join(dict.fromkeys(cleaned))  # de-dupe, preserve order
+def _flatten_parts(parts: List[str]) -> str:
+    # de-dupe while preserving order
+    out: List[str] = []
+    seen = set()
+    for p in parts:
+        p = _safe_str(p)
+        if not p:
+            continue
+        key = p.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(p)
+    return " | ".join(out)
 
 
 def _detect_remote(*texts: str) -> bool:
@@ -34,19 +44,27 @@ def _detect_hybrid(*texts: str) -> bool:
     return bool(_HYBRID_RE.search(blob))
 
 
+def _ms_to_iso(ms: Any) -> Optional[str]:
+    """
+    Lever uses epoch milliseconds for createdAt/updatedAt.
+    Convert to ISO-8601 UTC for consistent sorting and CSV friendliness.
+    """
+    if ms is None:
+        return None
+    try:
+        # Some payloads might be strings; coerce safely
+        ms_int = int(ms)
+        if ms_int <= 0:
+            return None
+        return datetime.fromtimestamp(ms_int / 1000, tz=timezone.utc).isoformat()
+    except Exception:
+        return None
+
+
 class LeverSource(JobSource):
     """
     Fetch postings from Lever's public endpoint:
-    https://api.lever.co/v0/postings/{company}?mode=json
-
-    Notes:
-    - Lever's structured "categories.location" is often NOT "Remote"
-      even when the role is remote/hybrid.
-    - We therefore build a normalized 'location' plus 'is_remote' using:
-        - categories.location
-        - workplaceType (if present)
-        - job description text
-        - any additional lever fields that may hint remote/hybrid
+      https://api.lever.co/v0/postings/{company}?mode=json
     """
 
     def __init__(self, company: Optional[str] = None):
@@ -69,6 +87,7 @@ class LeverSource(JobSource):
             return []
 
         jobs: List[Dict[str, Any]] = []
+
         for job in data:
             if not isinstance(job, dict):
                 continue
@@ -81,62 +100,65 @@ class LeverSource(JobSource):
             if not isinstance(categories, dict):
                 categories = {}
 
-            # Lever structured fields
             loc_struct = _safe_str(categories.get("location"))
             team = _safe_str(categories.get("team"))
             dept = _safe_str(categories.get("department"))
             commitment = _safe_str(categories.get("commitment"))
 
-            # Some Lever accounts include workplaceType / remote flags (not always present)
-            workplace_type = _safe_str(job.get("workplaceType"))  # e.g., "remote", "hybrid", "onsite"
-            # descriptionPlain is sometimes None; description can be HTML
+            workplace_type = _safe_str(job.get("workplaceType"))  # sometimes: "remote", "hybrid", "onsite"
             desc_plain = _safe_str(job.get("descriptionPlain"))
             desc_html = _safe_str(job.get("description"))
 
-            # Build a richer "location-ish" string
-            location_parts: List[str] = []
+            created_at = _ms_to_iso(job.get("createdAt"))
+            updated_at = _ms_to_iso(job.get("updatedAt"))
+            posted_at = created_at  # Lever doesn't always have a distinct "posted" timestamp
+
+            # Build normalized location string
+            parts: List[str] = []
             if loc_struct:
-                location_parts.append(loc_struct)
+                parts.append(loc_struct)
             if workplace_type:
-                location_parts.append(workplace_type)
-            # Sometimes commitment/team embed hints like "Remote"
+                parts.append(workplace_type)
             if commitment:
-                location_parts.append(commitment)
-            if team:
-                location_parts.append(team)
-            if dept:
-                location_parts.append(dept)
+                parts.append(commitment)
 
-            location_norm = _flatten_list(location_parts)
+            # Remote/hybrid detection: use title + description + structured bits
+            is_remote = _detect_remote(loc_struct, workplace_type, commitment, title, desc_plain, desc_html)
+            is_hybrid = _detect_hybrid(loc_struct, workplace_type, commitment, title, desc_plain, desc_html)
 
-            # Remote/hybrid detection: look at structured + description
-            is_remote = _detect_remote(location_norm, desc_plain, desc_html, title)
-            is_hybrid = _detect_hybrid(location_norm, desc_plain, desc_html, title)
+            # Make "location" more useful to your matcher:
+            # If it's remote/hybrid, ensure the word "remote"/"hybrid" appears.
+            if is_remote and "remote" not in " ".join(parts).lower():
+                parts.append("remote")
+            if is_hybrid and "hybrid" not in " ".join(parts).lower():
+                parts.append("hybrid")
 
-            # Normalize to the fields your matcher already expects:
-            # - it uses job["content"] and job["location"] / job["location_name"]
-            # We provide "content" and "location" explicitly.
+            location_norm = _flatten_parts(parts) or loc_struct or workplace_type or ""
+
+            # Prefer plain description; fall back to HTML
+            content = desc_plain or desc_html or ""
+
             jobs.append(
                 {
                     "id": job_id,
                     "title": title,
-                    "company": self.company,   # lever "company" slug
-                    "location": location_norm or loc_struct,  # best effort
+                    "company": self.company,
+                    "location": location_norm,
                     "team": team,
                     "department": dept,
                     "commitment": commitment,
-                    "workplace_type": workplace_type,
-                    "is_remote": is_remote,
-                    "is_hybrid": is_hybrid,
-                    # Provide both "content" and "description" for compatibility
-                    "content": desc_html or desc_plain,
-                    "description": desc_plain,
                     "url": hosted_url,
                     "source": "lever",
-                    # These may exist in some payloads; keep if present
-                    "created_at": job.get("createdAt"),
-                    "updated_at": job.get("updatedAt"),
-                    "posted_at": job.get("createdAt") or job.get("updatedAt"),
+
+                    # Keep both fields for compatibility:
+                    # - matching.py reads job.get("content") or job.get("description")
+                    "content": content,
+                    "description": content,
+
+                    # ✅ normalized ISO strings
+                    "posted_at": posted_at,
+                    "created_at": created_at,
+                    "updated_at": updated_at,
                 }
             )
 

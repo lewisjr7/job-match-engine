@@ -88,12 +88,14 @@ def run(config_path: str = "config/config.yaml") -> None:
     weights_dict = cfg.scoring.weights.model_dump()
     filters_dict = cfg.filters.model_dump()
     filters_dict["companies"] = cfg.sources.greenhouse.companies
-    # ✅ pass new location policy block (if present)
-    filters_dict["location_filters"] = (
-        cfg.location_filters.model_dump() if getattr(cfg, "location_filters", None) else {}
-    )
+    # after filters_dict is created
+    filters_dict["location_filters"] = getattr(cfg, "location_filters", None)
+    if filters_dict["location_filters"] is not None and hasattr(filters_dict["location_filters"], "model_dump"):
+        filters_dict["location_filters"] = filters_dict["location_filters"].model_dump()
+    print(f"[DEBUG] location_filters passed to matcher: {filters_dict.get('location_filters')}")
 
-    print("[DEBUG] location_filters passed to matcher:", filters_dict["location_filters"])
+
+    # print("[DEBUG] location_filters passed to matcher:", filters_dict["location_filters"])
 
 
 

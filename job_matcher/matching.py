@@ -70,23 +70,12 @@ _REMOTE_TOKENS = [
     "telecommute",
 ]
 
-# canonical US signals
-_US_TOKENS = [
-    "united states",
-    "united states of america",
-    "usa",
-    "u.s.",
-    "u.s",
-]
-
-# US state abbreviations (lowercase)
 _US_STATE_ABBRS = {
     "al","ak","az","ar","ca","co","ct","de","fl","ga","hi","id","il","in","ia","ks","ky","la","me",
     "md","ma","mi","mn","ms","mo","mt","ne","nv","nh","nj","nm","ny","nc","nd","oh","ok","or","pa",
     "ri","sc","sd","tn","tx","ut","vt","va","wa","wv","wi","wy","dc",
 }
 
-# US state names (lowercase)
 _US_STATE_NAMES = {
     "alabama","alaska","arizona","arkansas","california","colorado","connecticut","delaware","florida","georgia",
     "hawaii","idaho","illinois","indiana","iowa","kansas","kentucky","louisiana","maine","maryland","massachusetts",
@@ -102,33 +91,54 @@ def is_remote(text: str) -> bool:
     return any(tok in t for tok in _REMOTE_TOKENS)
 
 
-def _looks_like_us_location(location_text: str) -> bool:
+def _has_explicit_us_token(text: str) -> bool:
     """
-    IMPORTANT: Only pass ACTUAL location-ish text here.
-    Do NOT pass job descriptions. Job descriptions often contain "About us",
-    which will create false positives if we look for "us".
+    Catch explicit US markers (incl. U.S. / (U.S.)).
     """
-    t = f" {_normalize(location_text)} "
-    if not t.strip():
-        return False
-
-    # Explicit US tokens
-    if any(f" {tok} " in t for tok in _US_TOKENS):
+    t = f" {_normalize(text)} "
+    if " united states " in t or " united states of america " in t or " usa " in t:
         return True
 
-    # Standalone "US" token (avoid matching "business")
-    if re.search(r"(^|[\s,|/(\[])us([\s,|/)\]]|$)", t):
+    # u.s., u.s, (u.s.)
+    if re.search(r"(?<![a-z])u\.?s\.?(?![a-z])", t):
         return True
 
-    # State name present
-    for name in _US_STATE_NAMES:
-        if f" {name} " in t or f"{name}," in t or f"{name}|" in t or f"{name}/" in t:
-            return True
+    # standalone 'us' (avoid 'business')
+    if re.search(r"(?<![a-z])us(?![a-z])", t):
+        return True
 
-    # State abbreviation token present (TX, CA, WI, etc.)
-    # Matches: ", tx", " tx ", "|tx|", "(tx)", "/tx"
-    hits = re.findall(r"(?:^|[\s,|/(\[])([a-z]{2})(?:$|[\s,|/)\]])", t)
-    return any(h in _US_STATE_ABBRS for h in hits)
+    return False
+
+
+def _has_us_state_abbr(text: str) -> bool:
+    """
+    IMPORTANT FIX:
+    Only treat state abbreviations as valid if they appear in ORIGINAL TEXT
+    as uppercase tokens (e.g., 'TX', 'CA', 'WI').
+    This prevents the word 'or' from being interpreted as Oregon.
+    """
+    original = text or ""
+    hits = re.findall(r"(?:^|[\s,|/(\-)])([A-Z]{2})(?:$|[\s,|/)\-])", f" {original} ")
+    return any(h.lower() in _US_STATE_ABBRS for h in hits)
+
+
+def _has_us_state_name(text: str) -> bool:
+    t = f" {_normalize(text)} "
+    return any(f" {name} " in t for name in _US_STATE_NAMES)
+
+
+def _looks_like_us_location(text: str) -> bool:
+    """
+    US signals (strict enough to reject 'Remote Poland' / 'Remote Spain' / Canada Remote),
+    but permissive enough for 'Texas | remote' and 'Remote (U.S.)'.
+    """
+    if _has_explicit_us_token(text):
+        return True
+    if _has_us_state_abbr(text):
+        return True
+    if _has_us_state_name(text):
+        return True
+    return False
 
 
 def _match_states(text: str, allowed_states: List[str]) -> bool:
@@ -141,8 +151,8 @@ def _match_states(text: str, allowed_states: List[str]) -> bool:
         if not s:
             continue
 
-        # 2-letter abbreviation boundary match
-        if len(s) == 2 and re.search(rf"(?:^|[\s,|/(\[])({re.escape(s)})(?:$|[\s,|/)\]])", t):
+        # 2-letter abbreviation boundary match (case-insensitive)
+        if len(s) == 2 and re.search(rf"(?:^|[\s,|/(\-)]){re.escape(s)}(?:$|[\s,|/)\-])", t):
             return True
 
         # full-name substring match
@@ -163,21 +173,6 @@ def _match_cities(text: str, allowed_cities: List[str]) -> bool:
     return False
 
 
-def _extract_location_text(job: Dict[str, Any], title: str) -> str:
-    """
-    DO NOT use the full job description as a location fallback.
-    It contains "About us" and other strings that can trip US detection.
-
-    If location is missing, we only use title as a very weak hint for "remote".
-    """
-    loc = (job.get("location") or job.get("location_name") or "").strip()
-    if loc:
-        return loc
-
-    # Weak fallback: title only (helps detect remote sometimes)
-    return title.strip()
-
-
 # ----------------------------
 # Location policy
 # ----------------------------
@@ -190,10 +185,8 @@ def location_matches_policy(
     legacy_remote_only: bool | None,
 ) -> bool:
     loc = _normalize(job_location_text)
-    lf = location_filters or {}
 
-    # We consider "new mode" active if the key exists in filters dict (even if empty dict)
-    # But we can only enforce rules if it has meaningful keys.
+    lf = location_filters or {}
     has_new = bool(lf)
 
     # ----------------------------
@@ -202,69 +195,62 @@ def location_matches_policy(
     if has_new:
         allow_remote = bool(lf.get("allow_remote", True))
 
-        allowed_countries = [_normalize(x) for x in (lf.get("allowed_countries") or []) if _normalize(x)]
-        allowed_states = [_normalize(x) for x in (lf.get("allowed_states") or []) if _normalize(x)]
-        allowed_cities = [_normalize(x) for x in (lf.get("allowed_cities") or []) if _normalize(x)]
+        allowed_countries = [
+            _normalize(x) for x in (lf.get("allowed_countries") or []) if _normalize(x)
+        ]
+        allowed_states = [
+            _normalize(x) for x in (lf.get("allowed_states") or []) if _normalize(x)
+        ]
+        allowed_cities = [
+            _normalize(x) for x in (lf.get("allowed_cities") or []) if _normalize(x)
+        ]
 
         wants_us_only = any(x in ("united states", "usa", "us") for x in allowed_countries)
         job_is_remote = is_remote(loc)
 
-        # REMOTE jobs
+        # REMOTE JOBS
         if job_is_remote:
             if not allow_remote:
                 return False
-
-            # If user constrained countries, enforce them.
-            # If that includes US, require US signals (state name/abbr also counts).
+            if wants_us_only:
+                return _looks_like_us_location(job_location_text)
             if allowed_countries:
-                if wants_us_only:
-                    return _looks_like_us_location(loc)
-                # Otherwise require any allowed country token present
                 return any(c in loc for c in allowed_countries)
-
-            # No country constraint -> allow any remote
             return True
 
-        # NON-REMOTE jobs
-        if wants_us_only and not _looks_like_us_location(loc):
+        # NON-REMOTE JOBS
+        if wants_us_only and not _looks_like_us_location(job_location_text):
             return False
 
-        # City/state constraints only apply to NON-REMOTE (so they don't block US-remote)
+        # City/state filters apply only to NON-REMOTE
         if allowed_states or allowed_cities:
             return _match_cities(loc, allowed_cities) or _match_states(loc, allowed_states)
 
         return True
 
     # ----------------------------
-    # LEGACY MODE (filters.locations + remote_only)
+    # LEGACY MODE
     # ----------------------------
     wanted = [_normalize(x) for x in (legacy_locations or []) if _normalize(x)]
     remote_only = bool(legacy_remote_only or False)
 
+    if remote_only and not is_remote(loc):
+        return False
+    if not wanted:
+        return True
+
     wants_us = any(x in ("united states", "usa", "us") for x in wanted)
     wants_remote = any("remote" in x for x in wanted)
 
-    # If config wants US but we have no usable location text, reject (prevents "About us" false positives)
-    if wants_us and not loc:
+    if wants_us and not _looks_like_us_location(job_location_text):
         return False
-
-    # If remote_only is enabled, job must be remote
-    if remote_only and not is_remote(loc):
-        return False
-
-    # If user wants US, enforce US signals (includes state abbreviations/names)
-    if wants_us and not _looks_like_us_location(loc):
-        return False
-
-    # If user wants remote explicitly, enforce remote
     if wants_remote and not is_remote(loc):
         return False
 
-    # If any legacy constraints existed, and we satisfied them, accept
-    if wanted:
+    if wants_us or wants_remote:
         return True
 
-    return True
+    return any(x in loc for x in wanted)
 
 
 # ----------------------------
@@ -284,17 +270,13 @@ def score_jobs(
     include_title_keywords = filters.get("include_title_keywords", []) or []
     exclude_title_keywords = filters.get("exclude_title_keywords", []) or []
 
-    # Greenhouse company allowlist (only enforced for greenhouse jobs)
     allowed_companies = set(
         c.strip().lower()
         for c in (filters.get("companies", []) or [])
         if isinstance(c, str) and c.strip()
     )
 
-    # New location policy block (passed from main.py if you wire it)
     location_filters = filters.get("location_filters") or {}
-
-    # Legacy location fields
     legacy_locations = filters.get("locations", []) or []
     legacy_remote_only = bool(filters.get("remote_only", False))
 
@@ -304,12 +286,10 @@ def score_jobs(
         company = (job.get("company") or "").strip()
         source = (job.get("source") or "").strip().lower()
 
-        # Enforce allowlist only for greenhouse jobs
         if source == "greenhouse" and allowed_companies and company.lower() not in allowed_companies:
             continue
 
         title = (job.get("title") or "").strip()
-
         if not is_title_included(title, include_title_keywords):
             continue
         if is_title_excluded(title, exclude_title_keywords):
@@ -318,9 +298,8 @@ def score_jobs(
         content = job.get("content") or job.get("description") or ""
         content_text = html_to_text(content) if ("<" in str(content)) else (content or "")
 
-        # Use ONLY location-ish text for location policy (no description fallback)
-        location_raw = (job.get("location") or job.get("location_name") or "").strip()
-        location_text = _extract_location_text(job, title)
+        location = (job.get("location") or job.get("location_name") or "").strip()
+        location_text = location or f"{title} {content_text}"
 
         if not location_matches_policy(
             job_location_text=location_text,
@@ -351,7 +330,7 @@ def score_jobs(
             {
                 "source": job.get("source", ""),
                 "company": company,
-                "location": location_raw,  # keep the original field for output (can be empty)
+                "location": location,
                 "title": title,
                 "url": url,
                 "score_percent": breakdown.total_percent,
