@@ -39,6 +39,9 @@ class GreenhouseSource(JobSource):
         - For each job, if we already have same updated_at, reuse the existing record (no detail call)
         - Otherwise fetch detail endpoint and update record
         """
+        # reused = 0
+        # fetched = 0
+
         existing_by_id = existing_by_id or {}
 
         list_url = f"https://boards-api.greenhouse.io/v1/boards/{self.company}/jobs"
@@ -77,8 +80,13 @@ class GreenhouseSource(JobSource):
             # If we already have this job AND updated_at hasn't changed, reuse old record.
             existing = existing_by_id.get(job_id)
             if existing and (existing.get("updated_at") == list_updated_at) and existing.get("content"):
+                # reused += 1
                 results.append(existing)
                 continue
+
+            # Else fetch details...
+            # fetched += 1
+
 
             # Else fetch details
             try:
@@ -115,6 +123,8 @@ class GreenhouseSource(JobSource):
                 "updated_at": detail_json.get("updated_at") or list_updated_at,
                 "posted_at": detail_json.get("created_at") or list_updated_at,
             }
+            
+            print(f"[GREENHOUSE] {self.company}: reused={reused} fetched_details={fetched} total={len(results)}")
 
             results.append(record)
 

@@ -4,11 +4,94 @@ from __future__ import annotations
 import json
 import re
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
+from datetime import datetime
 
 from job_matcher.scoring import calculate_match_score
 from job_matcher.utils import html_to_text
 
+
+def _norm(s: str) -> str:
+    return " ".join((s or "").strip().lower().split())
+
+def _parse_dt(x) -> float:
+    """
+    Returns a sortable timestamp (seconds). Works with:
+    - ISO strings: 2026-01-31T...
+    - Lever ms ints: 1738...
+    - None
+    """
+    if x is None:
+        return 0.0
+    # Lever sometimes stores epoch ms in raw fields
+    if isinstance(x, (int, float)):
+        # assume ms if huge
+        if x > 10_000_000_000:
+            return float(x) / 1000.0
+        return float(x)
+    if isinstance(x, str):
+        s = x.strip()
+        if not s:
+            return 0.0
+        # ISO-ish
+        try:
+            # handle trailing Z
+            s = s.replace("Z", "+00:00")
+            return datetime.fromisoformat(s).timestamp()
+        except Exception:
+            return 0.0
+    return 0.0
+
+def _job_dedupe_key(j: dict) -> str:
+    url = (j.get("url") or "").strip()
+    if url:
+        return f"url::{url}"
+
+    source = _norm(j.get("source") or "")
+    company = _norm(j.get("company") or "")
+
+    jid = (j.get("id") or "").strip()
+    if jid:
+        return f"id::{source}::{company}::{jid}"
+
+    title = _norm(j.get("title") or "")
+    loc = _norm(j.get("location") or j.get("location_name") or "")
+    return f"fuzzy::{source}::{company}::{title}::{loc}"
+
+def _job_quality_score(j: dict) -> Tuple[int, float, int]:
+    """
+    Higher is better:
+    1) longer text content
+    2) newer updated/created
+    3) has id
+    """
+    content = j.get("content") or j.get("description") or ""
+    text_len = len(str(content))
+    newest = max(
+        _parse_dt(j.get("updated_at")),
+        _parse_dt(j.get("created_at")),
+        _parse_dt(j.get("updatedAt")),
+        _parse_dt(j.get("createdAt")),
+    )
+    has_id = 1 if (j.get("id") or "").strip() else 0
+    return (text_len, newest, has_id)
+
+def dedupe_jobs(jobs: list[dict]) -> list[dict]:
+    """
+    Deduplicate by stable key and keep the best-quality record.
+    """
+    best_by_key: dict[str, dict] = {}
+    for j in jobs:
+        if not isinstance(j, dict):
+            continue
+        k = _job_dedupe_key(j)
+        prev = best_by_key.get(k)
+        if prev is None:
+            best_by_key[k] = j
+            continue
+        if _job_quality_score(j) > _job_quality_score(prev):
+            best_by_key[k] = j
+    return list(best_by_key.values())
 
 # ----------------------------
 # IO
@@ -28,6 +111,8 @@ def load_raw_jobs(raw_jobs_dir: str = "data/raw_jobs") -> List[Dict[str, Any]]:
             if isinstance(data, list):
                 jobs.extend(data)
         except Exception:
+            continue
+        if not (fp.name.startswith("greenhouse_") or fp.name.startswith("lever_")):
             continue
     return jobs
 
@@ -264,6 +349,11 @@ def score_jobs(
     weights: Dict[str, float],
     filters: Dict[str, Any],
 ) -> List[Dict[str, Any]]:
+    before = len(jobs)
+    jobs = dedupe_jobs(jobs)
+    after = len(jobs)
+    if after != before:
+        print(f"[DEBUG] Deduped jobs: {before} -> {after} (removed {before-after})")
     keywords = filters.get("keywords", []) or []
     min_pct = int(filters.get("min_match_percent", 0))
 
